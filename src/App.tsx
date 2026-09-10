@@ -1,184 +1,111 @@
-import { useState, useEffect, useCallback } from 'react'
-import MiningDashboard from './components/MiningDashboard'
-import MiningConsole from './components/MiningConsole'
-import CryptoSelector from './components/CryptoSelector'
-import StatsCards from './components/StatsCards'
-import HashRateChart from './components/HashRateChart'
-import WalletPanel from './components/WalletPanel'
+import { useState } from 'react'
+import PoolMonitor from './components/PoolMonitor'
+import WalletLookup from './components/WalletLookup'
+import ProfitCalculator from './components/ProfitCalculator'
+import NetworkStats from './components/NetworkStats'
 
-export interface MiningState {
-  isMining: boolean
-  hashRate: number
-  shares: number
-  blocksFound: number
-  earnings: number
-  difficulty: number
-  temperature: number
-  power: number
-  selectedCrypto: string
-  logs: string[]
-  hashRateHistory: number[]
+type Tab = 'monitor' | 'wallet' | 'calculator' | 'network'
+
+export interface PoolConfig {
+  id: string
+  name: string
+  coin: string
+  symbol: string
+  apiBase: string
+  icon: string
+  color: string
+  algorithm: string
 }
 
+export const POOLS: PoolConfig[] = [
+  { id: 'kas', name: 'Kaspa', coin: 'KAS', symbol: 'KAS', apiBase: 'https://kas.2miners.com/api', icon: '💎', color: 'from-green-400 to-emerald-600', algorithm: 'kHeavyHash' },
+  { id: 'etc', name: 'Ethereum Classic', coin: 'ETC', symbol: 'ETC', apiBase: 'https://etc.2miners.com/api', icon: 'Ξ', color: 'from-green-500 to-teal-600', algorithm: 'Ethash' },
+  { id: 'erg', name: 'Ergo', coin: 'ERG', symbol: 'ERG', apiBase: 'https://ergo.2miners.com/api', icon: '⬡', color: 'from-red-500 to-rose-600', algorithm: 'Autolykos' },
+  { id: 'zec', name: 'Zcash', coin: 'ZEC', symbol: 'ZEC', apiBase: 'https://zec.2miners.com/api', icon: 'ⓩ', color: 'from-orange-500 to-yellow-500', algorithm: 'Equihash' },
+  { id: 'xmr', name: 'Monero', coin: 'XMR', symbol: 'XMR', apiBase: 'https://xmr.2miners.com/api', icon: 'ɱ', color: 'from-orange-600 to-red-600', algorithm: 'RandomX' },
+  { id: 'rvn', name: 'Ravencoin', coin: 'RVN', symbol: 'RVN', apiBase: 'https://rvn.2miners.com/api', icon: '🦅', color: 'from-gray-400 to-gray-600', algorithm: 'KawPow' },
+  { id: 'ethw', name: 'EthereumPoW', coin: 'ETHW', symbol: 'ETHW', apiBase: 'https://ethw.2miners.com/api', icon: '⟠', color: 'from-blue-500 to-indigo-600', algorithm: 'Ethash' },
+  { id: 'bch', name: 'Bitcoin Cash', coin: 'BCH', symbol: 'BCH', apiBase: 'https://bch.2miners.com/api', icon: '₿', color: 'from-green-500 to-green-700', algorithm: 'SHA-256' },
+]
+
 function App() {
-  const [miningState, setMiningState] = useState<MiningState>({
-    isMining: false,
-    hashRate: 0,
-    shares: 0,
-    blocksFound: 0,
-    earnings: 0,
-    difficulty: 1,
-    temperature: 45,
-    power: 0,
-    selectedCrypto: 'BTC',
-    logs: [],
-    hashRateHistory: [],
-  })
+  const [activeTab, setActiveTab] = useState<Tab>('monitor')
+  const [selectedPool, setSelectedPool] = useState<PoolConfig>(POOLS[0])
 
-  const [intervalId, setIntervalId] = useState<ReturnType<typeof setInterval> | null>(null)
-
-  const addLog = useCallback((message: string) => {
-    const timestamp = new Date().toLocaleTimeString()
-    setMiningState(prev => ({
-      ...prev,
-      logs: [`[${timestamp}] ${message}`, ...prev.logs].slice(0, 50),
-    }))
-  }, [])
-
-  const startMining = useCallback(() => {
-    setMiningState(prev => ({ ...prev, isMining: true }))
-    addLog('🚀 Mining started')
-    addLog(`⛏️ Algorithm: SHA-256 | Pool: stratum+tcp://pool.cryptominer.pro:3333`)
-    addLog(`🔗 Connected to ${miningState.selectedCrypto} network`)
-
-    const id = setInterval(() => {
-      setMiningState(prev => {
-        if (!prev.isMining) return prev
-
-        const baseHashRate = prev.selectedCrypto === 'BTC' ? 95 : prev.selectedCrypto === 'ETH' ? 45 : prev.selectedCrypto === 'LTC' ? 120 : 60
-        const variance = (Math.random() - 0.5) * 20
-        const newHashRate = Math.max(10, baseHashRate + variance)
-        const shareFound = Math.random() > 0.7
-        const newShares = prev.shares + (shareFound ? 1 : 0)
-        const blockFound = Math.random() > 0.995
-        const newBlocks = prev.blocksFound + (blockFound ? 1 : 0)
-        const earningsPerShare = prev.selectedCrypto === 'BTC' ? 0.00001 : prev.selectedCrypto === 'ETH' ? 0.001 : prev.selectedCrypto === 'LTC' ? 0.01 : 0.0005
-        const newEarnings = prev.earnings + (shareFound ? earningsPerShare : 0)
-        const newTemp = 45 + (newHashRate / 120) * 30 + Math.random() * 3
-        const newPower = 100 + (newHashRate / 120) * 200 + Math.random() * 10
-
-        const newHistory = [...prev.hashRateHistory, newHashRate].slice(-30)
-
-        // Add logs
-        const timestamp = new Date().toLocaleTimeString()
-        const newLogs: string[] = []
-        if (shareFound) {
-          newLogs.push(`[${timestamp}] ✅ Share accepted (${newHashRate.toFixed(1)} MH/s)`)
-        }
-        if (blockFound) {
-          newLogs.push(`[${timestamp}] 💎 BLOCK FOUND! Reward: ${earningsPerShare} ${prev.selectedCrypto}`)
-        }
-        if (Math.random() > 0.9) {
-          const nonce = Math.floor(Math.random() * 999999999).toString(16).padStart(8, '0')
-          newLogs.push(`[${timestamp}] ⛏️ New job received | diff: ${(Math.random() * 10000).toFixed(0)} | nonce: 0x${nonce}`)
-        }
-
-        return {
-          ...prev,
-          hashRate: newHashRate,
-          shares: newShares,
-          blocksFound: newBlocks,
-          earnings: newEarnings,
-          temperature: newTemp,
-          power: newPower,
-          hashRateHistory: newHistory,
-          logs: [...newLogs, ...prev.logs].slice(0, 50),
-        }
-      })
-    }, 1000)
-
-    setIntervalId(id)
-  }, [addLog, miningState.selectedCrypto])
-
-  const stopMining = useCallback(() => {
-    if (intervalId) {
-      clearInterval(intervalId)
-      setIntervalId(null)
-    }
-    setMiningState(prev => ({ ...prev, isMining: false, hashRate: 0, power: 0 }))
-    addLog('⛔ Mining stopped')
-  }, [intervalId, addLog])
-
-  const selectCrypto = useCallback((crypto: string) => {
-    setMiningState(prev => ({ ...prev, selectedCrypto: crypto }))
-    addLog(`🔄 Switched to ${crypto}`)
-  }, [addLog])
-
-  useEffect(() => {
-    return () => {
-      if (intervalId) clearInterval(intervalId)
-    }
-  }, [intervalId])
+  const tabs = [
+    { id: 'monitor' as Tab, label: 'Pool Monitor', icon: 'fas fa-satellite-dish' },
+    { id: 'wallet' as Tab, label: 'Wallet Lookup', icon: 'fas fa-wallet' },
+    { id: 'calculator' as Tab, label: 'Profit Calculator', icon: 'fas fa-calculator' },
+    { id: 'network' as Tab, label: 'Network Stats', icon: 'fas fa-network-wired' },
+  ]
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-gray-950 text-white">
       {/* Header */}
-      <header className="bg-gray-800/80 backdrop-blur-sm border-b border-gray-700 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center">
-              <i className="fas fa-gem text-white text-lg"></i>
+      <header className="bg-gray-900/90 backdrop-blur-md border-b border-gray-800 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20">
+                <i className="fas fa-pickaxe text-white text-lg">⛏</i>
+              </div>
+              <div>
+                <h1 className="text-lg font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+                  CryptoMine Tools
+                </h1>
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest">Real Mining Dashboard</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-                CryptoMiner Pro
-              </h1>
-              <p className="text-xs text-gray-400">Advanced Mining Dashboard</p>
+
+            {/* Pool Selector */}
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedPool.id}
+                onChange={(e) => setSelectedPool(POOLS.find(p => p.id === e.target.value) || POOLS[0])}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-500 cursor-pointer"
+              >
+                {POOLS.map(pool => (
+                  <option key={pool.id} value={pool.id}>
+                    {pool.icon} {pool.coin} - {pool.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${miningState.isMining ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
-              <span className="text-sm text-gray-300">{miningState.isMining ? 'Mining Active' : 'Idle'}</span>
-            </div>
-            <button
-              onClick={miningState.isMining ? stopMining : startMining}
-              className={`px-6 py-2 rounded-lg font-semibold transition-all duration-300 ${
-                miningState.isMining
-                  ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30'
-                  : 'bg-green-500 hover:bg-green-600 shadow-lg shadow-green-500/30'
-              }`}
-            >
-              {miningState.isMining ? '⛔ Stop Mining' : '▶ Start Mining'}
-            </button>
+
+          {/* Tabs */}
+          <div className="flex gap-1 mt-3 -mb-3">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-gray-800 text-yellow-400 border-t border-x border-gray-700'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
+                }`}
+              >
+                <i className={`${tab.icon} mr-2`}></i>
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* Crypto Selector */}
-        <CryptoSelector selected={miningState.selectedCrypto} onSelect={selectCrypto} />
-
-        {/* Stats Cards */}
-        <StatsCards state={miningState} />
-
-        {/* Charts, Dashboard and Wallet */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <HashRateChart history={miningState.hashRateHistory} isMining={miningState.isMining} />
-          <MiningDashboard state={miningState} />
-          <WalletPanel state={miningState} />
-        </div>
-
-        {/* Mining Console */}
-        <MiningConsole logs={miningState.logs} />
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {activeTab === 'monitor' && <PoolMonitor pool={selectedPool} />}
+        {activeTab === 'wallet' && <WalletLookup pool={selectedPool} />}
+        {activeTab === 'calculator' && <ProfitCalculator pool={selectedPool} />}
+        {activeTab === 'network' && <NetworkStats pool={selectedPool} />}
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-700 mt-8 py-4">
-        <div className="max-w-7xl mx-auto px-4 text-center text-gray-500 text-sm">
-          <p>⚠️ This is a simulation dashboard for educational purposes only. No actual mining is performed.</p>
-          <p className="mt-1">CryptoMiner Pro © 2026 | Built with React + Tailwind CSS</p>
+      <footer className="border-t border-gray-800 mt-8 py-4">
+        <div className="max-w-7xl mx-auto px-4 text-center text-gray-500 text-xs">
+          <p>Data dari 2Miners API & CoinGecko API • Real-time mining pool statistics</p>
+          <p className="mt-1">CryptoMine Tools © 2026 • Connected to live mining pools</p>
         </div>
       </footer>
     </div>
