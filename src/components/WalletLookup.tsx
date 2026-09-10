@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { PoolConfig } from '../App'
-import { fetchAccountInfo, fetchCoinPrice, COINGECKO_IDS, formatHashrate, formatNumber, timeAgo } from '../utils/api'
+import { fetchAccountInfo, fetchCoinPrice, fetchAccountShares, COINGECKO_IDS, formatHashrate, formatNumber, timeAgo } from '../utils/api'
+import MiniChart from './MiniChart'
 
 interface Props {
   pool: PoolConfig
@@ -10,6 +11,7 @@ export default function WalletLookup({ pool }: Props) {
   const [wallet, setWallet] = useState('')
   const [accountData, setAccountData] = useState<any>(null)
   const [price, setPrice] = useState<any>(null)
+  const [shareData, setShareData] = useState<{ timestamp: number; value: number }[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -18,11 +20,13 @@ export default function WalletLookup({ pool }: Props) {
     setLoading(true)
     setError(null)
     setAccountData(null)
+    setShareData([])
 
     try {
-      const [account, priceData] = await Promise.all([
+      const [account, priceData, shares] = await Promise.all([
         fetchAccountInfo(pool, wallet.trim()),
         fetchCoinPrice(COINGECKO_IDS[pool.symbol] || ''),
+        fetchAccountShares(pool, wallet.trim(), '6h'),
       ])
 
       if (!account || account.error) {
@@ -30,6 +34,15 @@ export default function WalletLookup({ pool }: Props) {
       } else {
         setAccountData(account)
         setPrice(priceData)
+        
+        // Parse share data for chart
+        if (shares && typeof shares === 'object') {
+          const chartData = Object.entries(shares).map(([ts, val]) => ({
+            timestamp: parseInt(ts),
+            value: val as number,
+          })).sort((a, b) => a.timestamp - b.timestamp)
+          setShareData(chartData)
+        }
       }
     } catch (err) {
       setError('Failed to fetch wallet data. Please try again.')
@@ -213,6 +226,23 @@ export default function WalletLookup({ pool }: Props) {
               </div>
             </div>
           </div>
+
+          {/* Hashrate History Chart */}
+          {shareData.length > 0 && (
+            <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+              <h4 className="text-sm font-semibold text-gray-400 mb-3 flex items-center gap-2">
+                <i className="fas fa-chart-area text-blue-400"></i>
+                Hashrate History (6h)
+              </h4>
+              <MiniChart
+                data={shareData}
+                color="#3b82f6"
+                label="Share Rate"
+                unit="shares/min"
+                height={150}
+              />
+            </div>
+          )}
 
           {/* Workers */}
           {accountData.workers && Object.keys(accountData.workers).length > 0 && (
